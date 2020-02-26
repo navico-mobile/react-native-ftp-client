@@ -92,6 +92,26 @@ RCT_EXPORT_MODULE(RNFtpClient)
     return [NSError errorWithDomain:nsDomain code:error userInfo:@{NSLocalizedDescriptionKey:errorMessage}];
 }
 
+-(NSString*) makeErrorMessageWithPrefix:(NSString*) prefix domain:(CFStreamErrorDomain) domain errorCode:( NSInteger) error errorMessage:(NSString *)errorMessage
+{
+    NSString* nsDomain = @"unknown_domain";
+    switch (domain){
+        case kCFStreamErrorDomainCustom:
+            nsDomain = @"Cocoa";
+            break;
+        case kCFStreamErrorDomainPOSIX:
+        {
+            errorMessage = [NSString stringWithUTF8String:strerror((int)error)];
+            nsDomain =  @"Posix";
+            break;
+        }
+        case kCFStreamErrorDomainMacOSStatus:
+            nsDomain = @"OSX";
+            break;
+    }
+    return [NSString stringWithFormat:@"%@ %@(%ld) %@",prefix, nsDomain,error,errorMessage];
+}
+
 RCT_REMAP_METHOD(setup,
                  setupWithIp:(NSString*) ip
                  AndPort:(NSInteger) port
@@ -154,7 +174,8 @@ RCT_REMAP_METHOD(list,
     request.failAction = ^(CFStreamErrorDomain domain, NSInteger error, NSString *errorMessage) {
         NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, error, errorMessage); //
         NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
-        reject(RNFTPCLIENT_ERROR_CODE_LIST,@"list error",nsError);
+        NSString* message = [self makeErrorMessageWithPrefix:@"list error" domain:domain errorCode:error errorMessage:errorMessage];
+        reject(RNFTPCLIENT_ERROR_CODE_LIST,message,nsError);
     };
     [request start];
 
@@ -226,13 +247,15 @@ RCT_REMAP_METHOD(uploadFile,
     request.failAction = ^(CFStreamErrorDomain domain, NSInteger error, NSString *errorMessage) {
         NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, error, errorMessage); //
         NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
-        reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,@"upload error",nsError);
+        NSString* message = [self makeErrorMessageWithPrefix:@"upload error" domain:domain errorCode:error errorMessage:errorMessage];
+        reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,message,nsError);
     };
     BOOL started = [request start];
     if(started){
         UploadTaskData* upload = [[UploadTaskData alloc]init];
         upload.lastPercentage = -1;
         upload.request = request;
+
         [self->uploadTokens setObject:upload forKey:token];
         [self sendProgressEventToToken:token withPercentage:0];
     }else{
@@ -291,7 +314,8 @@ RCT_REMAP_METHOD(remove,
     request.failAction = ^(CFStreamErrorDomain domain, NSInteger error, NSString *errorMessage) {
         NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, error, errorMessage);
         NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
-        reject(RNFTPCLIENT_ERROR_CODE_REMOVE,@"remove file error",nsError);
+        NSString* message = [self makeErrorMessageWithPrefix:@"remove error" domain:domain errorCode:error errorMessage:errorMessage];
+        reject(RNFTPCLIENT_ERROR_CODE_REMOVE,message,nsError);
     };
     [request start];
 }

@@ -129,7 +129,8 @@ static NSInteger const UPLOAD_BUFFER_SIZE = 1024;
 }
 
 - (void)stop {
-    NSLog(@"LxFTPRequest: Need override by subclass!");
+    CFBridgingRelease(_streamClientContext.info);
+    _streamClientContext.info = NULL;
 }
 
 - (NSString *)errorMessageOfCode:(NSInteger)code {
@@ -382,7 +383,8 @@ void resourceListReadStreamClientCallBack(CFReadStreamRef stream, CFStreamEventT
 
 - (void)stop {
     if (self.readStream == nil) return;
-        
+
+    [super stop];        
     CFReadStreamUnscheduleFromRunLoop(self.readStream, CFRunLoopGetCurrent(), kCFRunLoopCommonModes);
     CFReadStreamClose(self.readStream);
     CFRelease(self.readStream);
@@ -593,9 +595,6 @@ void downloadReadStreamClientCallBack(CFReadStreamRef stream, CFStreamEventType 
 
     CFWriteStreamSetProperty(self.writeStream, kCFStreamPropertyFTPUserName, (__bridge CFTypeRef)self.username);
     CFWriteStreamSetProperty(self.writeStream, kCFStreamPropertyFTPPassword, (__bridge CFTypeRef)self.password);
-    //    CFWriteStreamSetProperty(self.writeStream, kCFStreamPropertyFTPAttemptPersistentConnection, kCFBooleanFalse);
-    //    CFWriteStreamSetProperty(self.writeStream, kCFStreamPropertyFTPFetchResourceInfo, kCFBooleanTrue);
-    //    CFWriteStreamSetProperty(self.writeStream, kCFStreamPropertyFileCurrentOffset, <#CFTypeRef propertyValue#>)
 
     Boolean supportsAsynchronousNotification = CFWriteStreamSetClient(self.writeStream,
                                                                       kCFStreamEventNone |
@@ -680,6 +679,8 @@ void uploadWriteStreamClientCallBack(CFWriteStreamRef stream, CFStreamEventType 
 }
 
 - (void)stop {
+    [super stop];
+    
     CFWriteStreamUnscheduleFromRunLoop(self.writeStream, CFRunLoopGetCurrent(), kCFRunLoopCommonModes);
     CFWriteStreamClose(self.writeStream);
     CFRelease(self.writeStream);
@@ -761,6 +762,8 @@ void createResourceWriteStreamClientCallBack(CFWriteStreamRef stream, CFStreamEv
 }
 
 - (void)stop {
+    [super stop];
+    
     CFWriteStreamUnscheduleFromRunLoop(self.writeStream, CFRunLoopGetCurrent(), kCFRunLoopCommonModes);
     CFWriteStreamClose(self.writeStream);
     CFRelease(self.writeStream);
@@ -798,6 +801,10 @@ void createResourceWriteStreamClientCallBack(CFWriteStreamRef stream, CFStreamEv
         self.failAction(0, (NSInteger)errorCode, @"Unknown");
         return NO;
     }
+}
+
+- (void)stop {
+    [super stop];
 }
 
 @end
