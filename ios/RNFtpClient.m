@@ -235,7 +235,7 @@ RCT_REMAP_METHOD(uploadFile,
     request.password = self->password;
 
     request.progressAction = ^(NSInteger totalSize, NSInteger finishedSize, CGFloat finishedPercent) {
-        NSLog(@"totalSize = %ld, finishedSize = %ld, finishedPercent = %f", totalSize, finishedSize, finishedPercent); //
+        NSLog(@"totalSize = %ld, finishedSize = %ld, finishedPercent = %f", (long)totalSize, (long)finishedSize, finishedPercent); //
         [self sendProgressEventToToken:token withPercentage:finishedPercent];
     };
     request.successAction = ^(Class resultClass, id result) {
@@ -245,7 +245,9 @@ RCT_REMAP_METHOD(uploadFile,
         resolve(@(true));
     };
     request.failAction = ^(CFStreamErrorDomain domain, NSInteger error, NSString *errorMessage) {
-        NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, error, errorMessage); //
+        [self->uploadTokens removeObjectForKey:token];
+
+        NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, (long)error, errorMessage); //
         NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
         NSString* message = [self makeErrorMessageWithPrefix:@"upload error" domain:domain errorCode:error errorMessage:errorMessage];
         reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,message,nsError);
