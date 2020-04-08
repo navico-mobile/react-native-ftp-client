@@ -27,5 +27,6 @@ declare module FtpClient {
         percentage: number;
     }) => void): EmitterSubscription;
     function remove(remote_path: string): Promise<void>;
+    const ERROR_MESSAGE_CANCELLED: string;
 }
 export default FtpClient;

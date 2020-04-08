@@ -12,6 +12,8 @@ NSString* const RNFTPCLIENT_ERROR_CODE_REMOVE = @"RNFTPCLIENT_ERROR_CODE_REMOVE"
 
 NSInteger const MAX_UPLOAD_COUNT = 10;
 
+NSString* const ERROR_MESSAGE_CANCELLED = @"ERROR_MESSAGE_CANCELLED";
+
 #pragma mark - UploadTaskData
 @interface UploadTaskData:NSObject
 @property(readwrite) NSInteger lastPercentage;
@@ -196,6 +198,11 @@ RCT_REMAP_METHOD(list,
     }
 }
 
+- (NSDictionary *)constantsToExport
+{
+  return @{ ERROR_MESSAGE_CANCELLED: ERROR_MESSAGE_CANCELLED };
+}
+
 RCT_REMAP_METHOD(uploadFile,
                  uploadFileFromLocal:(NSString*)localPath
                  toRemote:(NSString*)remotePath
@@ -248,9 +255,14 @@ RCT_REMAP_METHOD(uploadFile,
         [self->uploadTokens removeObjectForKey:token];
 
         NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, (long)error, errorMessage); //
-        NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
-        NSString* message = [self makeErrorMessageWithPrefix:@"upload error" domain:domain errorCode:error errorMessage:errorMessage];
-        reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,message,nsError);
+
+        if([errorMessage isEqual:ERROR_MESSAGE_CANCELLED]){
+            reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,ERROR_MESSAGE_CANCELLED,nil);
+        }else{
+            NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
+            NSString* message = [self makeErrorMessageWithPrefix:@"upload error" domain:domain errorCode:error errorMessage:errorMessage];
+            reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,message,nsError);
+        }
     };
     BOOL started = [request start];
     if(started){
@@ -288,6 +300,7 @@ RCT_REMAP_METHOD(cancelUploadFile,
     }
     [self->uploadTokens removeObjectForKey:token];
     [upload.request stop];
+    upload.request.failAction(kCFStreamErrorDomainCustom,0,ERROR_MESSAGE_CANCELLED);
 
     [self clearRemoteFileByToken:token];
     resolve([NSNumber numberWithBool:TRUE]);

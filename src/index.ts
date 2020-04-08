@@ -67,6 +67,8 @@ module FtpClient {
     export async function remove(remote_path:string):Promise<void>{
         return RNFtpClient.remove(remote_path);
     }
+
+    export const ERROR_MESSAGE_CANCELLED:string = RNFtpClient.ERROR_MESSAGE_CANCELLED;
 };
 
 export default FtpClient;

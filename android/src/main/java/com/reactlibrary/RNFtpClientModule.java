@@ -35,6 +35,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.TimeZone;
+import java.util.Map;
 
 public class RNFtpClientModule extends ReactContextBaseJavaModule {
 
@@ -55,6 +56,8 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
   private final static String RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD = "RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD";
   private final static String RNFTPCLIENT_ERROR_CODE_REMOVE = "RNFTPCLIENT_ERROR_CODE_REMOVE";
   private final static String RNFTPCLIENT_ERROR_CODE_LOGOUT = "RNFTPCLIENT_ERROR_CODE_LOGOUT";
+
+  private final static String ERROR_MESSAGE_CANCELLED = "ERROR_MESSAGE_CANCELLED";
 
   public RNFtpClientModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -190,6 +193,13 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
     this.sendEvent(this.reactContext,RNFTPCLIENT_PROGRESS_EVENT_NAME,params);
   }
 
+  @Override
+  public Map<String, Object> getConstants() {
+    final Map<String, Object> constants = new HashMap();
+    constants.put(ERROR_MESSAGE_CANCELLED, ERROR_MESSAGE_CANCELLED);
+    return constants;
+  }
+
   @ReactMethod
   public void uploadFile(final String path,final String remoteDestinationPath, final Promise promise){
     final String token = makeToken(path,remoteDestinationPath);
@@ -250,7 +260,7 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
             }
           }else{
             //interupted, the file will deleted by cancel update operation
-            promise.resolve(false);
+            promise.reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,ERROR_MESSAGE_CANCELLED);
           }
         } catch (IOException e) {
           promise.reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,e.getMessage());

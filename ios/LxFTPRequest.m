@@ -680,7 +680,7 @@ void uploadWriteStreamClientCallBack(CFWriteStreamRef stream, CFStreamEventType 
 
 - (void)stop {
     [super stop];
-    
+
     CFWriteStreamUnscheduleFromRunLoop(self.writeStream, CFRunLoopGetCurrent(), kCFRunLoopCommonModes);
     CFWriteStreamClose(self.writeStream);
     CFRelease(self.writeStream);
