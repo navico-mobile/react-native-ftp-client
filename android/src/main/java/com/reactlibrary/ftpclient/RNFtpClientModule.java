@@ -1,9 +1,8 @@
 
 package com.reactlibrary.ftpclient;
 
-import android.util.Log;
-
 import androidx.annotation.Nullable;
+import android.util.Log;
 
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -48,6 +47,9 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
   private HashMap<String,Thread> uploadingTasks = new HashMap<>();
   private final static int MAX_UPLOAD_COUNT = 10;
 
+  private HashMap<String,Thread> downloadingTasks = new HashMap<>();
+  private final static int MAX_DOWNLOAD_COUNT = 10;
+
   private final static String RNFTPCLIENT_PROGRESS_EVENT_NAME = "Progress";
 
   private final static String RNFTPCLIENT_ERROR_CODE_LOGIN = "RNFTPCLIENT_ERROR_CODE_LOGIN";
@@ -56,6 +58,7 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
   private final static String RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD = "RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD";
   private final static String RNFTPCLIENT_ERROR_CODE_REMOVE = "RNFTPCLIENT_ERROR_CODE_REMOVE";
   private final static String RNFTPCLIENT_ERROR_CODE_LOGOUT = "RNFTPCLIENT_ERROR_CODE_LOGOUT";
+  private final static String RNFTPCLIENT_ERROR_CODE_DOWNLOAD = "RNFTPCLIENT_ERROR_CODE_DOWNLOAD";
 
   private final static String ERROR_MESSAGE_CANCELLED = "ERROR_MESSAGE_CANCELLED";
 
@@ -174,6 +177,10 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
 
   private String makeToken(final String path,final String remoteDestinationDir ){
     return String.format("%s=>%s", path, remoteDestinationDir);
+  }
+
+  private String makeDownloadToken(final String path,final String remoteDestinationDir ){
+    return String.format("%s<=%s", path, remoteDestinationDir);
   }
 
   private void sendEvent(ReactContext reactContext,
@@ -299,6 +306,125 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
     promise.resolve(true);
   }
 
+  private String getLocalFilePath(String path, String remotePath){
+    if(path.endsWith("/")){
+      int index = remotePath.lastIndexOf("/");
+      return path + remotePath.substring(index+1);
+    }else{
+      return path;
+    }
+  }
+  @ReactMethod
+  public void downloadFile(final String path,final String remoteDestinationPath, final Promise promise){
+    final String token = makeDownloadToken(path,remoteDestinationPath);
+    if(downloadingTasks.containsKey(token)){
+      promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,"same downloading task is runing");
+      return;
+    }
+    if(downloadingTasks.size() >= MAX_DOWNLOAD_COUNT){
+      promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,"has reach max downloading tasks");
+      return;
+    }
+    if(remoteDestinationPath.endsWith("/")){
+      promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,"remote path can not be a dir");
+      return;
+    }
+
+    final Thread t =
+            new Thread(new Runnable() {
+              @Override
+              public void run() {
+                FTPClient client = new FTPClient();
+                try {
+                  login(client);
+                  client.setFileType(FTP.BINARY_FILE_TYPE);
+                  FTPFile[] files = client.listFiles(remoteDestinationPath);
+                  if(files.length<=0){
+                    throw new Error(String.format("can not get file %s from ftp server",remoteDestinationPath));
+                  }
+                  FTPFile remoteFile = files[0];
+                  File downloadFile = new File(getLocalFilePath(path,remoteDestinationPath));
+                  if(downloadFile.exists()){
+                    throw new Error(String.format("local file exist",downloadFile.getAbsolutePath()));
+                  }
+                  File parentDir = downloadFile.getParentFile();
+                  if(parentDir != null && !parentDir.exists()){
+                    parentDir.mkdirs();
+                  }
+                  downloadFile.createNewFile();
+                  long finishBytes = 0;
+                  long totalBytes = remoteFile.getSize();
+
+                  Log.d(TAG,"Start downloading file");
+
+                  OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(downloadFile));
+                  InputStream inputStream = client.retrieveFileStream(remoteDestinationPath);
+                  byte[] bytesIn = new byte[4096];
+                  int read = 0;
+
+                  sendProgressEventToToken(token,0);
+                  Log.d(TAG,"Resolve token:"+token);
+                  int lastPercentage = 0;
+
+                  while ((read = inputStream.read(bytesIn)) != -1 && !Thread.currentThread().isInterrupted()) {
+                    outputStream.write(bytesIn, 0, read);
+                    finishBytes += read;
+                    int newPercentage = (int)(finishBytes*100/totalBytes);
+                    if(newPercentage>lastPercentage){
+                      sendProgressEventToToken(token,newPercentage);
+                      lastPercentage = newPercentage;
+                    }
+                  }
+                  inputStream.close();
+                  outputStream.close();
+                  Log.d(TAG,"Finish uploading");
+
+                  //if not interrupted
+                  if(!Thread.currentThread().isInterrupted()) {
+                    boolean done = client.completePendingCommand();
+
+                    if (done) {
+                      promise.resolve(true);
+                    } else {
+                      promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD, downloadFile.getName() + " is not download successfully.");
+                      downloadFile.delete();
+                    }
+                  }else{
+                    //interupted, the file will deleted by cancel download operation
+                    promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,ERROR_MESSAGE_CANCELLED);
+                    downloadFile.delete();
+                  }
+                } catch (Exception e) {
+                  promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,e.getMessage());
+                } finally {
+                  downloadingTasks.remove(token);
+                  logout(client);
+                }
+              }
+            });
+    t.start();
+    downloadingTasks.put(token,t);
+  }
+
+  @ReactMethod
+  public void cancelDownloadFile(final String token, final Promise promise){
+
+    Thread download = downloadingTasks.get(token);
+
+    if(download == null){
+      promise.reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,"token is wrong");
+      return;
+    }
+    download.interrupt();
+    FTPClient client = new FTPClient();
+    try{
+      download.join();
+    }catch (Exception e){
+      Log.d(TAG,"cancel download error",e);
+    }
+    downloadingTasks.remove(token);
+    promise.resolve(true);
+  }
 
   @Override
   public String getName() {

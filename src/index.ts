@@ -69,6 +69,14 @@ module FtpClient {
     }
 
     export const ERROR_MESSAGE_CANCELLED:string = RNFtpClient.ERROR_MESSAGE_CANCELLED;
+
+    export async function downloadFile (local_path:string,remote_path:string):Promise<void> {
+        return RNFtpClient.downloadFile(local_path,remote_path);
+    }
+
+    export async function cancelDownloadFile (token:string):Promise<void> {
+        return RNFtpClient.cancelDownloadFile(token);
+    }
 };
 
 export default FtpClient;

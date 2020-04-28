@@ -9,18 +9,20 @@ NSString* const RNFTPCLIENT_ERROR_CODE_LIST = @"RNFTPCLIENT_ERROR_CODE_LIST";
 NSString* const RNFTPCLIENT_ERROR_CODE_UPLOAD = @"RNFTPCLIENT_ERROR_CODE_UPLOAD";
 NSString* const RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD = @"RNFTPCLIENT_ERROR_CODE_CANCELUPLOAD";
 NSString* const RNFTPCLIENT_ERROR_CODE_REMOVE = @"RNFTPCLIENT_ERROR_CODE_REMOVE";
+NSString* const RNFTPCLIENT_ERROR_CODE_DOWNLOAD = @"RNFTPCLIENT_ERROR_CODE_DOWNLOAD";
 
 NSInteger const MAX_UPLOAD_COUNT = 10;
+NSInteger const MAX_DOWNLOAD_COUNT = 10;
 
 NSString* const ERROR_MESSAGE_CANCELLED = @"ERROR_MESSAGE_CANCELLED";
 
-#pragma mark - UploadTaskData
-@interface UploadTaskData:NSObject
+#pragma mark - FTPTaskData
+@interface FTPTaskData:NSObject
 @property(readwrite) NSInteger lastPercentage;
 @property(readwrite, strong) LxFTPRequest *request;
 @end
 
-@implementation UploadTaskData
+@implementation FTPTaskData
 @end
 
 #pragma mark - RNFtpClient
@@ -30,6 +32,7 @@ NSString* const ERROR_MESSAGE_CANCELLED = @"ERROR_MESSAGE_CANCELLED";
     NSString* password;
     NSMutableDictionary* uploadTokens;
     bool hasListeners;
+    NSMutableDictionary* downloadTokens;
 }
 
 - (dispatch_queue_t)methodQueue
@@ -41,6 +44,7 @@ NSString* const ERROR_MESSAGE_CANCELLED = @"ERROR_MESSAGE_CANCELLED";
      if (self = [super init]) {
          // Initialize self
          self->uploadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_UPLOAD_COUNT];
+         self->downloadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_DOWNLOAD_COUNT];
      }
      return self;
  }
@@ -65,18 +69,32 @@ RCT_EXPORT_MODULE(RNFtpClient)
 
 - (void)sendProgressEventToToken:(NSString*) token withPercentage:(NSInteger )percentage
 {
-    UploadTaskData* upload = self->uploadTokens[token];
-    if(percentage == upload.lastPercentage){
-        NSLog(@"the percentage is same %ld",percentage);
-        return;
-    }
-    upload.lastPercentage = percentage;
     if (hasListeners) { // Only send events if anyone is listening
         NSLog(@"send percentage %ld",percentage);
         [self sendEventWithName:RNFTPCLIENT_PROGRESS_EVENT_NAME body:@{@"token":token, @"percentage": @(percentage)}];
     }
 }
 
+- (void)sendUploadProgressEventToToken:(NSString*) token withPercentage:(NSInteger )percentage
+{
+    FTPTaskData* upload = self->uploadTokens[token];
+    if(percentage == upload.lastPercentage){
+        NSLog(@"the percentage is same %ld",percentage);
+        return;
+    }
+    upload.lastPercentage = percentage;
+    [self sendProgressEventToToken:token withPercentage:percentage];
+}
+- (void)sendDownloadProgressEventToToken:(NSString*) token withPercentage:(NSInteger )percentage
+{
+    FTPTaskData* download = self->downloadTokens[token];
+    if(percentage == download.lastPercentage){
+        NSLog(@"the percentage is same %ld",percentage);
+        return;
+    }
+    download.lastPercentage = percentage;
+    [self sendProgressEventToToken:token withPercentage:percentage];
+}
 -(NSError*) makeErrorFromDomain:(CFStreamErrorDomain) domain errorCode:( NSInteger) error errorMessage:(NSString *)errorMessage
 {
     NSErrorDomain nsDomain = NSCocoaErrorDomain;
@@ -243,11 +261,11 @@ RCT_REMAP_METHOD(uploadFile,
 
     request.progressAction = ^(NSInteger totalSize, NSInteger finishedSize, CGFloat finishedPercent) {
         NSLog(@"totalSize = %ld, finishedSize = %ld, finishedPercent = %f", (long)totalSize, (long)finishedSize, finishedPercent); //
-        [self sendProgressEventToToken:token withPercentage:finishedPercent];
+        [self sendUploadProgressEventToToken:token withPercentage:finishedPercent];
     };
     request.successAction = ^(Class resultClass, id result) {
         NSLog(@"Upload file succcess %@", result);
-        [self sendProgressEventToToken:token withPercentage:100];
+        [self sendUploadProgressEventToToken:token withPercentage:100];
         [self->uploadTokens removeObjectForKey:token];
         resolve(@(true));
     };
@@ -266,12 +284,12 @@ RCT_REMAP_METHOD(uploadFile,
     };
     BOOL started = [request start];
     if(started){
-        UploadTaskData* upload = [[UploadTaskData alloc]init];
+        FTPTaskData* upload = [[FTPTaskData alloc]init];
         upload.lastPercentage = -1;
         upload.request = request;
 
         [self->uploadTokens setObject:upload forKey:token];
-        [self sendProgressEventToToken:token withPercentage:0];
+        [self sendUploadProgressEventToToken:token withPercentage:0];
     }else{
         reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,@"start uploading failed",nil);
     }
@@ -292,7 +310,7 @@ RCT_REMAP_METHOD(cancelUploadFile,
                  resolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
-    UploadTaskData* upload = self->uploadTokens[token];
+    FTPTaskData* upload = self->uploadTokens[token];
 
     if(!upload){
         reject(RNFTPCLIENT_ERROR_CODE_UPLOAD,@"token is wrong",nil);
@@ -335,5 +353,125 @@ RCT_REMAP_METHOD(remove,
     [request start];
 }
 
+#pragma mark - Downloading
+-(NSString*) makeDownloadTokenByLocalPath:(NSString*) localPath andRemotePath:(NSString*) remotePath
+{
+    return [NSString stringWithFormat:@"%@<=%@",localPath,remotePath ];
+}
+
+-(NSString*) getLocalFilePath:(NSString*) path fromRemotePath:(NSString*) remotePath
+{
+    if([path hasSuffix:@"/"]){
+        NSString* fileName = [remotePath lastPathComponent];
+        return [path stringByAppendingPathComponent:fileName];
+    }else{
+        return path;
+    }
+}
+
+-(void) clearLocalFileByURL:(NSURL*) localFileURL
+{
+    [[NSFileManager defaultManager] removeItemAtURL:localFileURL error:nil];
+}
+
+RCT_REMAP_METHOD(downloadFile,
+                 downloadFileToLocal:(NSString*)localPath
+                 fromRemote:(NSString*)remotePath
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSLog(@"downloadFile %@<=%@",localPath,remotePath);
+    NSString* token = [self makeDownloadTokenByLocalPath:localPath andRemotePath:remotePath];
+    if(self->downloadTokens[token]){
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"same download is runing",nil);
+        return;
+    }
+    if([self->downloadTokens count] >= MAX_DOWNLOAD_COUNT){
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"has reach max uploading tasks", nil);
+        return;
+    }
+    if([remotePath hasSuffix:@"/"]){
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"remote path can not be a dir", nil);
+        return;
+    }
+
+    NSString* localFilePath = [self getLocalFilePath:localPath fromRemotePath:remotePath];
+    if([[NSFileManager defaultManager] fileExistsAtPath:localFilePath] == YES)
+    {
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"local file is exist",nil);
+        return ;
+    }
+    LxFTPRequest *request = [LxFTPRequest downloadRequest];
+    NSURL* serverURL = [[NSURL URLWithString:self->url] URLByAppendingPathComponent:remotePath];
+    request.serverURL = serverURL;
+    if (!request.serverURL) {
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,[NSString stringWithFormat:@"server url is invalide %@",serverURL],nil);
+        return;
+    }
+    NSURL* localFileURL = [NSURL fileURLWithPath:localFilePath];
+    request.localFileURL = localFileURL;
+    if (!request.localFileURL) {
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,[NSString stringWithFormat:@"local url is invalide %@",localFileURL],nil);
+        return;
+    }
+
+    request.username = self->user;
+    request.password = self->password;
+
+    request.progressAction = ^(NSInteger totalSize, NSInteger finishedSize, CGFloat finishedPercent) {
+        NSLog(@"totalSize = %ld, finishedSize = %ld, finishedPercent = %f", (long)totalSize, (long)finishedSize, finishedPercent); //
+        [self sendDownloadProgressEventToToken:token withPercentage:finishedPercent];
+    };
+    request.successAction = ^(Class resultClass, id result) {
+        NSLog(@"Download file succcess %@", result);
+        [self sendDownloadProgressEventToToken:token withPercentage:100];
+        [self->downloadTokens removeObjectForKey:token];
+        resolve(@(true));
+    };
+    request.failAction = ^(CFStreamErrorDomain domain, NSInteger error, NSString *errorMessage) {
+        [self->downloadTokens removeObjectForKey:token];
+
+        NSLog(@"domain = %ld, error = %ld, errorMessage = %@", domain, (long)error, errorMessage); //
+
+        if([errorMessage isEqual:ERROR_MESSAGE_CANCELLED]){
+            reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,ERROR_MESSAGE_CANCELLED,nil);
+        }else{
+            NSError* nsError = [self makeErrorFromDomain:domain errorCode:error errorMessage:errorMessage];
+            NSString* message = [self makeErrorMessageWithPrefix:@"download error" domain:domain errorCode:error errorMessage:errorMessage];
+            reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,message,nsError);
+        }
+        [self clearLocalFileByURL:localFileURL];
+    };
+    BOOL started = [request start];
+    if(started){
+        FTPTaskData* download = [[FTPTaskData alloc]init];
+        download.lastPercentage = -1;
+        download.request = request;
+
+        [self->downloadTokens setObject:download forKey:token];
+        [self sendDownloadProgressEventToToken:token withPercentage:0];
+    }else{
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"start download failed",nil);
+    }
+
+}
+
+RCT_REMAP_METHOD(cancelDownloadFile,
+                 cancelDownloadFileWithToken:(NSString*)token
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+    FTPTaskData* task = self->downloadTokens[token];
+
+    if(!task){
+        reject(RNFTPCLIENT_ERROR_CODE_DOWNLOAD,@"token is wrong",nil);
+        return;
+    }
+    [self->downloadTokens removeObjectForKey:token];
+    [task.request stop];
+    task.request.failAction(kCFStreamErrorDomainCustom,0,ERROR_MESSAGE_CANCELLED);
+
+    resolve([NSNumber numberWithBool:TRUE]);
+}
 @end
   

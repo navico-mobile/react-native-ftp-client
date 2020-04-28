@@ -7,6 +7,7 @@ Get inspired from it, but almost rewrite every corner.
 1. support three operations
     * list ftp dir.  
     * upload file to ftp.  
+    * download file from ftp.
     * remove file or dir from ftp.  
 
 2. NO session, which means treating each operation as a session.  

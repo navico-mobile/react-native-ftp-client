@@ -1,14 +1,16 @@
 <component name="libraryTable">
   <library name="Gradle: com.facebook.react:react-native:0.20.1@aar">
     <ANNOTATIONS>
-      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/5237af1165eed0af3346f3f92145abda/annotations.zip!/" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/ffef818cd6ccc7b8e7c239e8837338af/react-native-0.20.1/annotations.zip!/" />
     </ANNOTATIONS>
     <CLASSES>
-      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/5237af1165eed0af3346f3f92145abda/jars/classes.jar!/" />
-      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/5237af1165eed0af3346f3f92145abda/res" />
-      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/5237af1165eed0af3346f3f92145abda/jars/libs/infer-annotations-1.5.jar!/" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/ffef818cd6ccc7b8e7c239e8837338af/react-native-0.20.1/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/ffef818cd6ccc7b8e7c239e8837338af/react-native-0.20.1/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/ffef818cd6ccc7b8e7c239e8837338af/react-native-0.20.1/jars/libs/infer-annotations-1.5.jar!/" />
     </CLASSES>
-    <JAVADOC />
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-native/0.20.1/4ba10a8394c63d1d886cbb79c73e2745472d976b/react-native-0.20.1-javadoc.jar!/" />
+    </JAVADOC>
     <SOURCES>
       <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-native/0.20.1/aca865df36322fa13483c10dd4898f320b225ec0/react-native-0.20.1-sources.jar!/" />
     </SOURCES>
