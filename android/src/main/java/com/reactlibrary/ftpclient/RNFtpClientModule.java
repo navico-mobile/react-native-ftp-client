@@ -314,6 +314,16 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
       return path;
     }
   }
+  private long getRemoteSize(FTPClient client, String remoteFilePath) throws Exception {
+    client.sendCommand("SIZE", remoteFilePath);
+    String[] reply = client.getReplyStrings();
+    String[] response = reply[0].split(" ");
+    if(client.getReplyCode() != 213){
+      throw new Exception(String.format("ftp client size cmd response %d",client.getReplyCode()));
+    }
+    return Long.parseLong(response[1]);
+  };
+
   @ReactMethod
   public void downloadFile(final String path,final String remoteDestinationPath, final Promise promise){
     final String token = makeDownloadToken(path,remoteDestinationPath);
@@ -338,11 +348,8 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
                 try {
                   login(client);
                   client.setFileType(FTP.BINARY_FILE_TYPE);
-                  FTPFile[] files = client.listFiles(remoteDestinationPath);
-                  if(files.length<=0){
-                    throw new Error(String.format("can not get file %s from ftp server",remoteDestinationPath));
-                  }
-                  FTPFile remoteFile = files[0];
+
+                  final long totalBytes = getRemoteSize(client,remoteDestinationPath);
                   File downloadFile = new File(getLocalFilePath(path,remoteDestinationPath));
                   if(downloadFile.exists()){
                     throw new Error(String.format("local file exist",downloadFile.getAbsolutePath()));
@@ -353,7 +360,6 @@ public class RNFtpClientModule extends ReactContextBaseJavaModule {
                   }
                   downloadFile.createNewFile();
                   long finishBytes = 0;
-                  long totalBytes = remoteFile.getSize();
 
                   Log.d(TAG,"Start downloading file");
 
