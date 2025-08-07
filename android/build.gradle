@@ -22,6 +22,7 @@ def safeExtGet(prop, fallback) {
 android {
     compileSdkVersion safeExtGet('compileSdkVersion', 29)
     buildToolsVersion "29.0.3"
+    namespace "com.reactlibrary.ftpclient"
 
     defaultConfig {
         minSdkVersion safeExtGet('minSdkVersion', 16)
@@ -43,6 +44,6 @@ repositories {
 }
 
 dependencies {
-    compile 'com.facebook.react:react-native:+'
-    compile 'commons-net:commons-net:3.3'
+    implementation 'com.facebook.react:react-native:+'
+    implementation 'commons-net:commons-net:3.3'
 }
