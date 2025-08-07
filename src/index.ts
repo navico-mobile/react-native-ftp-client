@@ -1,6 +1,11 @@
 import { NativeModules, NativeEventEmitter,EmitterSubscription } from 'react-native';
 
 const { RNFtpClient } = NativeModules;
+
+if (!RNFtpClient) {
+  throw new Error(`The package 'react-native-ftp-client' doesn't seem to be linked.`);
+}
+
 const RNFtpClientEventEmitter = new NativeEventEmitter(RNFtpClient);
 
 export const enum FtpFileType {
@@ -22,7 +27,7 @@ export interface FtpSetupConfiguration{
         password:string
     };
 
-module FtpClient {
+namespace FtpClient {
     function getEnumFromString(typeString:string):FtpFileType {
         switch (typeString) {
             case "dir":

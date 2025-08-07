@@ -40,19 +40,21 @@ NSString* const ERROR_MESSAGE_CANCELLED = @"ERROR_MESSAGE_CANCELLED";
     return dispatch_get_main_queue();
 }
 
- - (instancetype)init {
-     if (self = [super init]) {
-         // Initialize self
-         self->uploadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_UPLOAD_COUNT];
-         self->downloadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_DOWNLOAD_COUNT];
-     }
-     return self;
- }
+- (instancetype)init {
+    if (self = [super init]) {
+        // Initialize self
+        self->uploadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_UPLOAD_COUNT];
+        self->downloadTokens = [[NSMutableDictionary alloc]initWithCapacity:MAX_DOWNLOAD_COUNT];
+    }
+    return self;
+}
+
 + (BOOL)requiresMainQueueSetup
 {
-  return NO;  // only do this if your module initialization relies on calling UIKit!
+    return NO;  // only do this if your module initialization relies on calling UIKit!
 }
-RCT_EXPORT_MODULE(RNFtpClient)
+
+RCT_EXPORT_MODULE()
 
 -(void)startObserving {
     hasListeners = YES;
